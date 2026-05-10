@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Color Palette following Cognitive & Perceptual Principles */
+  --color-primary-container: #1e293b;
+  /* Slate 800 for high contrast */
+  --color-background: #f8fafc;
+  /* Very light slate gray */
+  --color-on-surface: #0f172a;
+  /* Slate 900 for maximum readability */
+  --color-secondary-text: #334155;
+  /* Slate 700 for secondary body text */
+  --color-accent-blue: #2563eb;
+  --color-accent-emerald: #059669;
+  --color-accent-red: #dc2626;
+  --color-accent-amber: #d97706;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-sans;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Avoiding small color discrimination issues */
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply text-on-surface font-black tracking-tight;
+  }
+
+  p {
+    @apply text-secondary-text leading-relaxed;
+  }
+}
+
+/* Grouping patterns */
+.card-group {
+  @apply bg-white border border-slate-200 rounded-[2rem] shadow-sm;
+}
