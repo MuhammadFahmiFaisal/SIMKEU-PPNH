@@ -52,3 +52,12 @@ DROP TRIGGER IF EXISTS update_permissions_updated_at ON public.permissions;
 CREATE TRIGGER update_permissions_updated_at 
 BEFORE UPDATE ON public.permissions 
 FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+-- 7. Tambahkan Kolom Baru untuk Kartu Identitas Santri Modern (NISN, Alamat, Tempat & Tanggal Lahir, Foto)
+-- Menambahkan kolom nisn, alamat, tempat_lahir, tanggal_lahir, dan photo_url ke tabel students.
+ALTER TABLE public.students 
+ADD COLUMN IF NOT EXISTS nisn TEXT,
+ADD COLUMN IF NOT EXISTS alamat TEXT,
+ADD COLUMN IF NOT EXISTS tempat_lahir TEXT,
+ADD COLUMN IF NOT EXISTS tanggal_lahir TEXT,
+ADD COLUMN IF NOT EXISTS photo_url TEXT;

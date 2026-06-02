@@ -8,8 +8,11 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
+import { useStudents } from '../hooks/useStudents';
+import { useArrears } from '../hooks/useArrears';
+import { useReceipts } from '../hooks/useReceipts';
+import { useConfirm } from '../context/ConfirmContext';
 
 // Sub-components
 import { ArrearStats } from '../components/features/arrears/ArrearStats';
@@ -22,18 +25,11 @@ import { useArrearLogic } from '../components/features/arrears/useArrearLogic';
 import { Arrear } from '../types';
 
 export function ArrearsManagement() {
-  const {
-    students,
-    arrears,
-    batchAddArrears,
-    deleteArrear,
-    updateArrear,
-    processPayment,
-    sendPaymentReceipt,
-    sendConsolidatedReceipt,
-    previewReceiptPDF
-  } = useData();
+  const { students } = useStudents();
+  const { arrears, batchAddArrears, deleteArrear, updateArrear, processPayment } = useArrears();
+  const { sendPaymentReceipt, sendConsolidatedReceipt, previewReceiptPDF } = useReceipts();
   const { user } = useAuth();
+  const { confirm } = useConfirm();
 
   const isSuperAdmin = user?.role === 'Super Admin';
   const isAuditor = user?.role === 'Auditor';
@@ -113,6 +109,13 @@ export function ArrearsManagement() {
       dueDate: bulkData.dueDate
     }));
 
+    const confirmBulk = await confirm({
+      title: 'Konfirmasi Tagihan Massal',
+      message: `Apakah Anda yakin ingin membuat tagihan massal "${bulkData.type}" (${bulkData.month}) senilai Rp ${bulkData.amount.toLocaleString('id-ID')} untuk ${targetStudents.length} santri?`,
+      type: 'warning'
+    });
+    if (!confirmBulk) return;
+
     setIsProcessing(true);
     try {
       await batchAddArrears(newArrears);
@@ -154,6 +157,15 @@ export function ArrearsManagement() {
   };
 
   const handleDelete = async (id: string) => {
+    const arrear = arrears.find(a => a.id === id);
+    const student = students.find(s => s.id === arrear?.studentId);
+    const confirmDelete = await confirm({
+      title: 'Hapus Tagihan',
+      message: `Apakah Anda yakin ingin menghapus tagihan ${arrear?.type} (${arrear?.month}) senilai Rp ${arrear?.amount.toLocaleString('id-ID')} milik santri "${student?.name || 'terkait'}"?`,
+      type: 'danger'
+    });
+    if (!confirmDelete) return;
+
     try {
       await deleteArrear(id);
       showToast('success', 'Tagihan berhasil dihapus.');
@@ -168,6 +180,24 @@ export function ArrearsManagement() {
       showToast('success', 'Pembayaran berhasil diproses.');
     } catch (err) {
       showToast('error', 'Gagal memproses pembayaran.');
+    }
+  };
+
+  const handleUpdateArrear = async (id: string, data: Partial<Arrear>) => {
+    try {
+      await updateArrear(id, data);
+      showToast('success', 'Tagihan berhasil diperbarui.');
+    } catch (err) {
+      showToast('error', 'Gagal memperbarui tagihan.');
+    }
+  };
+
+  const handleSendConsolidatedReceipt = async (studentId: string, payments: { type: string, month: string, amount: number }[]) => {
+    try {
+      await sendConsolidatedReceipt(studentId, payments);
+      showToast('success', 'Membuka WhatsApp untuk mengirim struk...');
+    } catch (err) {
+      showToast('error', 'Gagal memproses pengiriman struk.');
     }
   };
 
@@ -265,8 +295,8 @@ export function ArrearsManagement() {
         setPartialInput={setPartialInput}
         processPayment={handleProcessPayment}
         deleteArrear={handleDelete}
-        updateArrear={updateArrear}
-        sendConsolidatedReceipt={sendConsolidatedReceipt}
+        updateArrear={handleUpdateArrear}
+        sendConsolidatedReceipt={handleSendConsolidatedReceipt}
         previewReceiptPDF={previewReceiptPDF}
       />
 

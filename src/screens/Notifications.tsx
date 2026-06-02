@@ -8,7 +8,10 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { useData } from '../context/DataContext';
+import { useStudents } from '../hooks/useStudents';
+import { useArrears } from '../hooks/useArrears';
+import { useNotifications } from '../hooks/useNotifications';
+import { useConfirm } from '../context/ConfirmContext';
 
 // Sub-components
 import { NotificationStats } from '../components/features/notifications/NotificationStats';
@@ -20,7 +23,10 @@ import { useNotificationLogic } from '../components/features/notifications/useNo
 import { generateArrearPdf } from '../lib/pdfGenerator';
 
 export function Notifications() {
-  const { students, arrears, notifications, sendNotification, sendBroadcastNotification } = useData();
+  const { students } = useStudents();
+  const { arrears } = useArrears();
+  const { notifications, sendNotification, sendBroadcastNotification } = useNotifications();
+  const { confirm } = useConfirm();
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -74,7 +80,15 @@ export function Notifications() {
     sortBy
   });
 
-  const handleSendWA = (studentId: string) => {
+  const handleSendWA = async (studentId: string) => {
+    const student = students.find(s => s.id === studentId);
+    const confirmSend = await confirm({
+      title: 'Kirim Notifikasi',
+      message: `Apakah Anda yakin ingin mengirim notifikasi WhatsApp tagihan kepada wali murid "${student?.name || 'terkait'}"?`,
+      type: 'info'
+    });
+    if (!confirmSend) return;
+
     setSendingId(studentId);
     setTimeout(() => {
       sendNotification(studentId);

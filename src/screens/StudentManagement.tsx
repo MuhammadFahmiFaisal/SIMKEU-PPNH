@@ -13,7 +13,8 @@ import {
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
+import { useConfirm } from '../context/ConfirmContext';
+import { useStudents } from '../hooks/useStudents';
 import { Student } from '../types';
 import * as XLSX from 'xlsx';
 
@@ -21,15 +22,16 @@ import * as XLSX from 'xlsx';
 import { StudentTable } from '../components/features/students/StudentTable';
 import { StudentModal } from '../components/features/students/StudentModal';
 import { useStudentLogic } from '../components/features/students/useStudentLogic';
-import { printClearanceLetter } from '../lib/pdfGenerator';
+import { printClearanceLetter, printStudentIDCard } from '../lib/pdfGenerator';
 import { PdfPreviewModal } from '../components/features/notifications/PdfPreviewModal';
 
 export function StudentManagement() {
   const { user } = useAuth();
-  const { students, addStudent, updateStudent, deleteStudent, batchAddStudents } = useData();
+  const { students, addStudent, updateStudent, deleteStudent, batchAddStudents } = useStudents();
+  const { confirm } = useConfirm();
   const isSuperAdmin = user?.role === 'Super Admin';
   const isAuditor = user?.role === 'Auditor';
-  const canWrite = user?.role === 'Super Admin' || user?.role === 'Bendahara';
+  const canWrite = user?.role === 'Super Admin' || user?.role === 'Bendahara' || user?.role === 'Keamanan';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,7 +53,12 @@ export function StudentManagement() {
     parentName: '',
     whatsapp: '',
     gender: 'L' as 'L' | 'P',
-    residenceStatus: 'Mondok' as 'Mondok' | 'Ansor'
+    residenceStatus: 'Mondok' as 'Mondok' | 'Ansor',
+    nisn: '',
+    alamat: '',
+    tempatLahir: '',
+    tanggalLahir: '',
+    photoUrl: ''
   });
 
   const uniqueClasses = Array.from(new Set(students.map(s => s.class))).sort();
@@ -66,7 +73,12 @@ export function StudentManagement() {
         parentName: student.parentName,
         whatsapp: student.whatsapp,
         gender: student.gender,
-        residenceStatus: student.residenceStatus
+        residenceStatus: student.residenceStatus,
+        nisn: student.nisn || '',
+        alamat: student.alamat || '',
+        tempatLahir: student.tempatLahir || '',
+        tanggalLahir: student.tanggalLahir || '',
+        photoUrl: student.photoUrl || ''
       });
     } else {
       setEditingStudent(null);
@@ -76,7 +88,12 @@ export function StudentManagement() {
         parentName: '', 
         whatsapp: '',
         gender: 'L',
-        residenceStatus: 'Mondok'
+        residenceStatus: 'Mondok',
+        nisn: '',
+        alamat: '',
+        tempatLahir: '',
+        tanggalLahir: '',
+        photoUrl: ''
       });
     }
     setIsModalOpen(true);
@@ -100,6 +117,14 @@ export function StudentManagement() {
   };
 
   const handleDelete = async (id: string) => {
+    const student = students.find(s => s.id === id);
+    const confirmDelete = await confirm({
+      title: 'Hapus Santri',
+      message: `Apakah Anda yakin ingin menghapus data santri "${student?.name || 'ini'}"? Seluruh riwayat perizinan dan tunggakan terkait santri ini juga akan ikut terhapus.`,
+      type: 'danger'
+    });
+    if (!confirmDelete) return;
+
     try {
       await deleteStudent(id);
       setUploadStatus({ type: 'success', message: 'Siswa berhasil dihapus.' });
@@ -115,6 +140,16 @@ export function StudentManagement() {
     setPreviewPdf({
       url,
       fileName: `Surat_Izin_Pulang_${student.name.replace(/\s+/g, '_')}.pdf`,
+      blob
+    });
+  };
+
+  const handlePrintCard = async (student: Student) => {
+    const blob = await printStudentIDCard(student);
+    const url = URL.createObjectURL(blob);
+    setPreviewPdf({
+      url,
+      fileName: `Kartu_ID_${student.name.replace(/\s+/g, '_')}.pdf`,
       blob
     });
   };
@@ -152,6 +187,15 @@ export function StudentManagement() {
         })).filter(s => s.name !== '');
 
         if (formattedStudents.length > 0) {
+          const confirmImport = await confirm({
+            title: 'Konfirmasi Import',
+            message: `Apakah Anda yakin ingin mengimpor ${formattedStudents.length} santri dari file Excel ini?`,
+            type: 'info'
+          });
+          if (!confirmImport) {
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
           setUploadStatus({ type: 'info', message: `Sedang mengimpor ${formattedStudents.length} siswa...` });
           await batchAddStudents(formattedStudents);
           setUploadStatus({ type: 'success', message: `${formattedStudents.length} siswa berhasil diimpor.` });
@@ -171,8 +215,19 @@ export function StudentManagement() {
 
   const handlePromoteClass = async () => {
     if(!promoteOldClass || !promoteNewClass) return;
-    setIsPromoting(true);
     const studentsToUpdate = students.filter(s => s.class === promoteOldClass);
+    if (studentsToUpdate.length === 0) {
+      setUploadStatus({ type: 'error', message: `Tidak ada santri di kelas "${promoteOldClass}".`});
+      return;
+    }
+    const confirmPromote = await confirm({
+      title: 'Konfirmasi Mutasi',
+      message: `Apakah Anda yakin ingin memindahkan ${studentsToUpdate.length} santri dari kelas "${promoteOldClass}" ke "${promoteNewClass}" secara massal?`,
+      type: 'warning'
+    });
+    if (!confirmPromote) return;
+
+    setIsPromoting(true);
     try {
        await Promise.all(studentsToUpdate.map(s => updateStudent(s.id, { class: promoteNewClass })));
        setUploadStatus({ type: 'success', message: `${studentsToUpdate.length} santri berhasil dipindah kelas.`});
@@ -289,6 +344,7 @@ export function StudentManagement() {
         onEdit={handleOpenModal}
         onDelete={handleDelete}
         onPrintClearance={handlePrintClearance}
+        onPrintCard={handlePrintCard}
       />
 
       <StudentModal 

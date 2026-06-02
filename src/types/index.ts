@@ -21,6 +21,11 @@ export interface Student {
   dispensationReason?: string;
   barcodeId?: string;
   statusPerizinan?: 'Di Dalam' | 'Di Luar' | 'Skorsing';
+  nisn?: string;
+  alamat?: string;
+  tempatLahir?: string;
+  tanggalLahir?: string;
+  photoUrl?: string;
 }
 
 export interface Notification {
@@ -47,7 +52,7 @@ export interface Transaction {
   id: string;
   studentId?: string | null;
   studentName: string;
-  type: 'Penambahan' | 'Pelunasan' | 'Penyesuaian' | 'Penghapusan' | 'Setoran';
+  type: 'Penambahan' | 'Pelunasan' | 'Penyesuaian' | 'Penghapusan' | 'Setoran' | 'Penerimaan' | 'Pengeluaran';
   amount: number;
   paymentCategory?: string;
   description: string;
@@ -74,7 +79,7 @@ export interface StudentPermission {
 
 export type UserRole = 'Super Admin' | 'Bendahara' | 'Auditor' | 'Keamanan';
 export type ResidenceStatus = 'Mondok' | 'Ansor';
-export type TransactionType = 'Penambahan' | 'Pelunasan' | 'Penyesuaian' | 'Penghapusan' | 'Setoran';
+export type TransactionType = 'Penambahan' | 'Pelunasan' | 'Penyesuaian' | 'Penghapusan' | 'Setoran' | 'Penerimaan' | 'Pengeluaran';
 export type NotificationStatus = 'Berhasil' | 'Gagal' | 'Pending';
 export type PermissionType = 'Pulang' | 'Keluar Singkat' | 'Sakit' | 'Lainnya';
 export type PermissionStatus = 'Aktif' | 'Kembali' | 'Terlambat' | 'Dibatalkan';

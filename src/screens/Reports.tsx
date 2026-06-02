@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { useData } from '../context/DataContext';
+import { useStudents } from '../hooks/useStudents';
+import { useArrears } from '../hooks/useArrears';
+import { useTransactions } from '../hooks/useTransactions';
+import { usePermissions } from '../hooks/usePermissions';
 import { Download, Filter, FileSpreadsheet, SearchX, Layers, Search, ClipboardList } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
@@ -32,7 +35,10 @@ const parseMonthYearString = (str: string) => {
 };
 
 export function Reports() {
-  const { students, arrears, transactions, permissions } = useData();
+  const { students } = useStudents();
+  const { arrears } = useArrears();
+  const { transactions } = useTransactions();
+  const { permissions } = usePermissions();
   const [activeTab, setActiveTab] = useState<'finance' | 'permission'>('finance');
   const [errorNotification, setErrorNotification] = useState<string | null>(null);
 

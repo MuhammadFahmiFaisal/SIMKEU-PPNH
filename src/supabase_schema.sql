@@ -6,7 +6,7 @@ CREATE TABLE profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    role TEXT CHECK (role IN ('Admin', 'Bendahara')) DEFAULT 'Bendahara',
+    role TEXT CHECK (role IN ('Super Admin', 'Bendahara', 'Auditor', 'Keamanan')) DEFAULT 'Bendahara',
     status TEXT CHECK (status IN ('Active', 'Locked')) DEFAULT 'Active',
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -21,6 +21,15 @@ CREATE TABLE students (
     whatsapp TEXT NOT NULL,
     gender TEXT CHECK (gender IN ('L', 'P')),
     residence_status TEXT CHECK (residence_status IN ('Mondok', 'Ansor')),
+    dispensation_status BOOLEAN DEFAULT false,
+    dispensation_reason TEXT,
+    barcode_id TEXT,
+    status_perizinan TEXT DEFAULT 'Di Dalam',
+    nisn TEXT,
+    alamat TEXT,
+    tempat_lahir TEXT,
+    tanggal_lahir TEXT,
+    photo_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -43,9 +52,11 @@ CREATE TABLE transactions (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     student_id UUID REFERENCES students(id) ON DELETE SET NULL,
     student_name TEXT, -- Snapshot name in case student is deleted
-    type TEXT CHECK (type IN ('Penambahan', 'Pelunasan', 'Penyesuaian', 'Penghapusan')),
+    type TEXT CHECK (type IN ('Penambahan', 'Pelunasan', 'Penyesuaian', 'Penghapusan', 'Setoran', 'Penerimaan', 'Pengeluaran')),
     amount NUMERIC(15, 2),
+    payment_category TEXT,
     description TEXT,
+    performed_by TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -70,27 +81,54 @@ ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- POLICIES
 
+-- Function to securely get the current user's role
+CREATE OR REPLACE FUNCTION get_my_role()
+RETURNS text AS $$
+  SELECT role FROM profiles WHERE id = auth.uid();
+$$ LANGUAGE sql SECURITY DEFINER;
+
 -- Profiles: Users can read all profiles but only update their own
 CREATE POLICY "Public profiles are viewable by authenticated users" 
 ON profiles FOR SELECT TO authenticated USING (true);
 
 CREATE POLICY "Users can update their own profile" 
 ON profiles FOR UPDATE TO authenticated USING (auth.uid() = id);
+CREATE POLICY "Super Admins can update any profile" 
+ON profiles FOR UPDATE TO authenticated USING (get_my_role() = 'Super Admin');
 
--- Students, Arrears, Transactions, Notifications: Viewable and modifiable by all authenticated staff
-CREATE POLICY "Authenticated users can manage students" 
-ON students FOR ALL TO authenticated USING (true) WITH CHECK (true);
+-- Students: Viewable by all authenticated, manageable by Admin/Bendahara/Keamanan(for permissions)
+CREATE POLICY "Authenticated users can view students" 
+ON students FOR SELECT TO authenticated USING (true);
 
-CREATE POLICY "Authenticated users can manage arrears" 
-ON arrears FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Admin and Bendahara can manage students" 
+ON students FOR ALL TO authenticated 
+USING (get_my_role() IN ('Super Admin', 'Bendahara', 'Keamanan')) 
+WITH CHECK (get_my_role() IN ('Super Admin', 'Bendahara', 'Keamanan'));
 
-CREATE POLICY "Authenticated users can view/add transactions" 
-ON transactions FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Authenticated users can add transactions" 
-ON transactions FOR INSERT TO authenticated WITH CHECK (true);
+-- Arrears: Admin, Bendahara, Auditor can view. Admin, Bendahara can manage.
+CREATE POLICY "Authorized roles can view arrears" 
+ON arrears FOR SELECT TO authenticated 
+USING (get_my_role() IN ('Super Admin', 'Bendahara', 'Auditor'));
 
-CREATE POLICY "Authenticated users can manage notifications" 
-ON notifications FOR ALL TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "Admin and Bendahara can manage arrears" 
+ON arrears FOR ALL TO authenticated 
+USING (get_my_role() IN ('Super Admin', 'Bendahara')) 
+WITH CHECK (get_my_role() IN ('Super Admin', 'Bendahara'));
+
+-- Transactions: Admin, Bendahara, Auditor can view. Admin, Bendahara can insert. No deletes.
+CREATE POLICY "Authorized roles can view transactions" 
+ON transactions FOR SELECT TO authenticated 
+USING (get_my_role() IN ('Super Admin', 'Bendahara', 'Auditor'));
+
+CREATE POLICY "Admin and Bendahara can insert transactions" 
+ON transactions FOR INSERT TO authenticated 
+WITH CHECK (get_my_role() IN ('Super Admin', 'Bendahara'));
+
+-- Notifications: Admin, Bendahara can manage
+CREATE POLICY "Admin and Bendahara can manage notifications" 
+ON notifications FOR ALL TO authenticated 
+USING (get_my_role() IN ('Super Admin', 'Bendahara')) 
+WITH CHECK (get_my_role() IN ('Super Admin', 'Bendahara'));
 
 -- TRIGGERS for updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -104,10 +142,3 @@ $$ language 'plpgsql';
 CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 CREATE TRIGGER update_students_updated_at BEFORE UPDATE ON students FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 CREATE TRIGGER update_arrears_updated_at BEFORE UPDATE ON arrears FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
-
--- VIEW for Dashboard Stats (Optional but helpful)
-CREATE VIEW dashboard_stats AS
-SELECT 
-    (SELECT COUNT(*) FROM students) as total_students,
-    (SELECT SUM(amount) FROM arrears WHERE status != 'Lunas') as total_unpaid_amount,
-    (SELECT COUNT(*) FROM arrears WHERE status = 'Kritis') as critical_arrears_count;

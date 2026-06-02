@@ -20,15 +20,18 @@ import {
 import { useAuth, Role } from '../../context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 
+import { useLocation, useNavigate } from 'react-router-dom';
+
 interface SidebarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
   isOpen?: boolean;
   onClose?: () => void;
 }
 
-export function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: SidebarProps) {
+export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const activeTab = location.pathname.split('/')[1] || 'dashboard';
 
   // App mode selection for Super Admins to segregate complex features
   const [appMode, setAppMode] = useState<'finance' | 'permission'>(() => {
@@ -41,9 +44,9 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: SidebarPro
     setAppMode(mode);
     localStorage.setItem('appMode', mode);
     if (mode === 'finance') {
-      setActiveTab('dashboard');
+      navigate('/dashboard');
     } else {
-      setActiveTab('scan');
+      navigate('/scan');
     }
   };
 
@@ -51,7 +54,7 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: SidebarPro
     { id: 'dashboard', label: 'Dasbor', icon: LayoutDashboard, roles: ['Super Admin', 'Bendahara', 'Auditor'], domain: 'finance' },
     { id: 'scan', label: 'Portal Scan Izin', icon: QrCode, roles: ['Super Admin', 'Keamanan'], domain: 'permission' },
     { id: 'permissions', label: 'Log Perizinan', icon: UserCheck, roles: ['Super Admin', 'Keamanan'], domain: 'permission' },
-    { id: 'students', label: 'Manajemen Siswa', icon: Users, roles: ['Super Admin', 'Bendahara', 'Auditor'], domain: 'finance' },
+    { id: 'students', label: 'Manajemen Siswa', icon: Users, roles: ['Super Admin', 'Bendahara', 'Auditor', 'Keamanan'], domain: 'both' },
     { id: 'arrears', label: 'Manajemen Tunggakan', icon: Wallet, roles: ['Super Admin', 'Bendahara', 'Auditor'], domain: 'finance' },
     { id: 'history', label: 'Riwayat Finansial', icon: History, roles: ['Super Admin', 'Auditor', 'Bendahara'], domain: 'finance' },
     { id: 'reports', label: 'Laporan Rekap', icon: FileSpreadsheet, roles: ['Super Admin', 'Bendahara', 'Auditor'], domain: 'both' },
@@ -153,7 +156,10 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, onClose }: SidebarPro
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  navigate(`/${item.id}`);
+                  if (onClose) onClose();
+                }}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-xs font-semibold tracking-wide",
                   isActive

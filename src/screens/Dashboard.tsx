@@ -24,10 +24,15 @@ import {
 } from 'lucide-react';
 import { StatsCard } from '../components/ui/StatsCard';
 import { ArrearsChart } from '../components/features/dashboard/ArrearsChart';
-import { useData } from '../context/DataContext';
+import { useStudents } from '../hooks/useStudents';
+import { useArrears } from '../hooks/useArrears';
+import { useTransactions } from '../hooks/useTransactions';
+import { useNotifications } from '../hooks/useNotifications';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import toast from 'react-hot-toast';
 
 export interface ReminderSchedule {
   id: string;
@@ -45,8 +50,12 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
-  const { students, arrears, notifications, transactions } = useData();
+  const { students } = useStudents();
+  const { arrears } = useArrears();
+  const { transactions } = useTransactions();
+  const { notifications } = useNotifications();
   const { user } = useAuth();
+  const { confirm } = useConfirm();
   
   const [selectedYear, setSelectedYear] = React.useState(() => new Date().getFullYear());
   const [isReminderModalOpen, setIsReminderModalOpen] = React.useState(false);
@@ -499,8 +508,13 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                                 <Edit2 size={12} />
                               </button>
                               <button
-                                onClick={() => {
-                                  if (window.confirm(`Hapus jadwal "${schedule.name}"?`)) {
+                                onClick={async () => {
+                                  const confirmDelete = await confirm({
+                                    title: 'Hapus Jadwal',
+                                    message: `Hapus jadwal "${schedule.name}"?`,
+                                    type: 'danger'
+                                  });
+                                  if (confirmDelete) {
                                     const filtered = reminderSchedules.filter(s => s.id !== schedule.id);
                                     setReminderSchedules(filtered);
                                     localStorage.setItem('simkeu_reminder_schedules', JSON.stringify(filtered));
@@ -644,7 +658,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                       type="button" 
                       onClick={() => {
                         if (!formName.trim()) {
-                          alert('Nama jadwal wajib diisi.');
+                          toast.error('Nama jadwal wajib diisi.');
                           return;
                         }
 
@@ -683,12 +697,9 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                           setReminderSchedules(updated);
                           localStorage.setItem('simkeu_reminder_schedules', JSON.stringify(updated));
                           
-                          setShowConfigSuccess(true);
+                          toast.success('Jadwal Pengingat Berhasil Disimpan!');
                           setIsFormView(false);
                           setCurrentEditingSchedule(null);
-                          setTimeout(() => {
-                            setShowConfigSuccess(false);
-                          }, 1500);
                         }, 800);
                       }}
                       disabled={isSavingConfig}
@@ -709,19 +720,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showConfigSuccess && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-8 right-8 z-[150] flex items-center gap-3 bg-emerald-600 text-white px-8 py-5 rounded-2xl shadow-2xl border border-emerald-500"
-          >
-            <CheckCircle2 size={18} />
-            <span className="text-xs font-black uppercase tracking-[0.15em]">Jadwal Pengingat Berhasil Disimpan!</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
     </motion.div>
   );
 }

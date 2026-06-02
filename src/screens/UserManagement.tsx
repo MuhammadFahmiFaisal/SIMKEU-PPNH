@@ -20,13 +20,15 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { useData } from '../context/DataContext';
+import { useUsers } from '../hooks/useUsers';
 import { AppUser } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 
 export function UserManagement() {
-  const { users, updateUserRole } = useData();
+  const { users, updateUserRole } = useUsers();
   const { user: currentUser } = useAuth();
+  const { confirm } = useConfirm();
 
   // Security Check: Only Super Admin can access this screen
   if (currentUser?.role !== 'Super Admin') {
@@ -70,6 +72,13 @@ export function UserManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser) {
+      const confirmChange = await confirm({
+        title: 'Konfirmasi Perubahan Peran',
+        message: `Apakah Anda yakin ingin memperbarui peran pengguna "${editingUser.name}" menjadi "${formData.role}"?`,
+        type: 'warning'
+      });
+      if (!confirmChange) return;
+
       try {
         await updateUserRole(editingUser.id, formData.role);
         setNotification({ type: 'success', message: 'Peran pengguna berhasil diperbarui.' });

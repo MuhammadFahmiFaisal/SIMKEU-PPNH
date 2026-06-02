@@ -9,14 +9,16 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
-import { useData } from '../../../context/DataContext';
+import { useArrears } from '../../../hooks/useArrears';
+import { useTransactions } from '../../../hooks/useTransactions';
 
 interface ArrearsChartProps {
   selectedYear: number;
 }
 
 export function ArrearsChart({ selectedYear }: ArrearsChartProps) {
-  const { arrears, transactions } = useData();
+  const { arrears } = useArrears();
+  const { transactions } = useTransactions();
 
   // Helper to get month name from date string or month name string
   const getMonthName = (monthStr: string) => {

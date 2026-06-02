@@ -16,13 +16,17 @@ import {
   Download,
   Mail
 } from 'lucide-react';
-import { useData } from '../context/DataContext';
+import { useStudents } from '../hooks/useStudents';
+import { useArrears } from '../hooks/useArrears';
+import { useTransactions } from '../hooks/useTransactions';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 export function Settings() {
-  const { students, arrears, transactions } = useData();
+  const { students } = useStudents();
+  const { arrears } = useArrears();
+  const { transactions } = useTransactions();
   
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('simkeu_api_key') || 'FN-8283-XXXX-9920');
   const [institutionName, setInstitutionName] = useState(() => localStorage.getItem('simkeu_institution_name') || 'Yayasan Pendidikan Pondok Pesantren Nurul Huda');

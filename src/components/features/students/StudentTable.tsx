@@ -1,5 +1,5 @@
 import React from 'react';
-import { SearchX, Edit2, Trash2, Lock, Printer } from 'lucide-react';
+import { SearchX, Edit2, Trash2, Lock, Printer, CreditCard } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Student } from '../../../types';
 import { printClearanceLetter } from '../../../lib/pdfGenerator';
@@ -12,6 +12,7 @@ interface StudentTableProps {
   onEdit: (student: Student) => void;
   onDelete: (id: string) => void;
   onPrintClearance: (student: Student) => void;
+  onPrintCard: (student: Student) => void;
 }
 
 export const StudentTable: React.FC<StudentTableProps> = ({
@@ -21,7 +22,8 @@ export const StudentTable: React.FC<StudentTableProps> = ({
   isAuditor,
   onEdit,
   onDelete,
-  onPrintClearance
+  onPrintClearance,
+  onPrintCard
 }) => {
   return (
     <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col mx-1">
@@ -91,18 +93,6 @@ export const StudentTable: React.FC<StudentTableProps> = ({
                   </td>
                   <td className="px-10 py-7 text-right">
                     <div className="flex items-center justify-end gap-3">
-                      {(student.totalArrears === 0 || student.dispensationStatus) ? (
-                        <button onClick={() => onPrintClearance(student)} className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white rounded-2xl transition-all shadow-sm group relative" title="Cetak Surat Izin Pulang">
-                          <Printer size={18} />
-                          <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Cetak Izin Pulang</span>
-                        </button>
-                      ) : (
-                        <div className="p-4 bg-slate-50 border border-slate-100 text-slate-300 rounded-2xl cursor-not-allowed relative group" title="Tertahan: Tidak bisa cetak surat">
-                          <Printer size={18} />
-                          <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-red-600 text-white text-[9px] font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Tertahan (Ada Tunggakan)</span>
-                        </div>
-                      )}
-                      
                       {canWrite && (
                         <button onClick={() => onEdit(student)} className="p-4 bg-white border border-slate-200 text-slate-900 hover:bg-slate-900 hover:text-white rounded-2xl transition-all shadow-sm"><Edit2 size={18} /></button>
                       )}

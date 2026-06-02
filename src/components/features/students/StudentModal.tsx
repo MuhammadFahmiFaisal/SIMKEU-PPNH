@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Student } from '../../../types';
+import toast from 'react-hot-toast';
 
 interface StudentModalProps {
   isOpen: boolean;
@@ -21,6 +22,69 @@ export const StudentModal: React.FC<StudentModalProps> = ({
   setFormData,
   onSubmit
 }) => {
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          const MAX_DIMENSION = 800; // max dimension to keep quality good but size small
+          if (width > height) {
+            if (width > MAX_DIMENSION) {
+              height *= MAX_DIMENSION / width;
+              width = MAX_DIMENSION;
+            }
+          } else {
+            if (height > MAX_DIMENSION) {
+              width *= MAX_DIMENSION / height;
+              height = MAX_DIMENSION;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error("Canvas not supported"));
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Compress to JPEG with 75% quality (usually resulting in < 200KB)
+          resolve(canvas.toDataURL('image/jpeg', 0.75)); 
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        toast.error("Harap unggah file berupa gambar (JPG/PNG).");
+        return;
+      }
+      
+      const toastId = toast.loading("Sedang mengompresi foto...");
+      try {
+        const compressedBase64 = await compressImage(file);
+        setFormData({ ...formData, photoUrl: compressedBase64 });
+        toast.success("Foto berhasil dikompresi dan ditambahkan!", { id: toastId });
+      } catch (err) {
+        console.error("Compression error:", err);
+        toast.error("Gagal mengompresi foto.", { id: toastId });
+      }
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -36,6 +100,36 @@ export const StudentModal: React.FC<StudentModalProps> = ({
             </div>
             <form onSubmit={onSubmit} className="flex-1 overflow-y-auto p-8 md:p-12 space-y-8 bg-white">
               <div className="bg-slate-50 p-6 md:p-8 rounded-[2rem] border border-slate-100 space-y-6">
+                  {/* Photo Upload Section */}
+                  <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-slate-200/50">
+                    <div className="w-24 h-32 bg-slate-200 rounded-2xl border border-slate-300 flex items-center justify-center overflow-hidden shrink-0 relative group shadow-inner">
+                      {formData.photoUrl ? (
+                        <img src={formData.photoUrl} alt="Foto Santri" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="text-center p-3 text-slate-400">
+                          <p className="text-[9px] font-black uppercase tracking-wider">No Photo</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3 text-center sm:text-left flex-1">
+                      <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest block">Foto Identitas Santri</label>
+                      <div className="flex flex-wrap gap-3 justify-center sm:justify-start">
+                        <label className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer hover:bg-slate-800 transition-all select-none">
+                          Pilih Foto
+                          <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                        </label>
+                        {formData.photoUrl && (
+                          <button type="button" onClick={() => setFormData({ ...formData, photoUrl: '' })} className="px-5 py-2.5 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-red-100 transition-all">
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[9px] font-bold text-slate-400 leading-normal">
+                        Rekomendasi rasio 3:4 (Pas Foto resmi). Sistem akan otomatis mengompresi ukuran foto (Auto-compress).
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       <div className="space-y-4">
                           <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Kategori Santri</label>
@@ -63,6 +157,31 @@ export const StudentModal: React.FC<StudentModalProps> = ({
                       <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Nama Lengkap Sesuai Akte</label>
                       <input required type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
                           className="w-full px-7 py-5 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-900 focus:border-slate-900 outline-none transition-all" placeholder="Input Nama Lengkap..." />
+                  </div>
+
+                  <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">NISN / Nomor Induk Santri</label>
+                      <input type="text" value={formData.nisn || ''} onChange={(e) => setFormData({ ...formData, nisn: e.target.value })} 
+                          className="w-full px-7 py-5 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-900 focus:border-slate-900 outline-none transition-all" placeholder="Contoh: 2026-05-001" />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                          <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Tempat Lahir</label>
+                          <input type="text" value={formData.tempatLahir || ''} onChange={(e) => setFormData({ ...formData, tempatLahir: e.target.value })} 
+                              className="w-full px-7 py-5 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-900 focus:border-slate-900 outline-none transition-all" placeholder="Contoh: Cirebon" />
+                      </div>
+                      <div className="space-y-3">
+                          <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Tanggal Lahir</label>
+                          <input type="text" value={formData.tanggalLahir || ''} onChange={(e) => setFormData({ ...formData, tanggalLahir: e.target.value })} 
+                              className="w-full px-7 py-5 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-900 focus:border-slate-900 outline-none transition-all" placeholder="Contoh: 12 April 2008" />
+                      </div>
+                  </div>
+
+                  <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest ml-1">Alamat Lengkap</label>
+                      <input type="text" value={formData.alamat || ''} onChange={(e) => setFormData({ ...formData, alamat: e.target.value })} 
+                          className="w-full px-7 py-5 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-900 focus:border-slate-900 outline-none transition-all" placeholder="Contoh: Beber, Cirebon" />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

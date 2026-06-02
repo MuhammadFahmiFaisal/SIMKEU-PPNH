@@ -42,3 +42,57 @@
 .card-group {
   @apply bg-white border border-slate-200 rounded-[2rem] shadow-sm;
 }
+
+/* --- Mobile Optimizations --- */
+
+/* Custom scrollbar for mobile */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+
+/* Glassmorphism utility */
+.glass-effect {
+  @apply bg-white/80 backdrop-blur-md border border-white/20;
+}
+
+/* Mobile tap target improvement */
+@layer components {
+  .btn-touch {
+    @apply min-h-[48px] px-6 py-3 flex items-center justify-center font-black text-[10px] uppercase tracking-widest transition-all;
+  }
+
+  .input-touch {
+    @apply min-h-[52px] px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 transition-all;
+  }
+}
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility scrollbar-default {
+  -ms-overflow-style: auto;
+  scrollbar-width: auto;
+  &::-webkit-scrollbar {
+    display: block;
+  }
+}
+
+/* Responsive Table Wrapper */
+.table-responsive {
+  @apply overflow-x-auto -mx-6 md:mx-0 px-6 md:px-0 scrollbar-hide md:scrollbar-default;
+}

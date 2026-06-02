@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Wallet, CheckCircle, Trash2, ShieldCheck, CheckCircle2, FileText, Edit2 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import { useConfirm } from '../../../context/ConfirmContext';
 import { Student, Arrear } from '../../../types';
 
 interface ArrearDetailModalProps {
@@ -41,6 +42,7 @@ export const ArrearDetailModal: React.FC<ArrearDetailModalProps> = ({
   sendConsolidatedReceipt,
   previewReceiptPDF
 }) => {
+  const { confirm } = useConfirm();
   const [sessionPayments, setSessionPayments] = React.useState<{ type: string, month: string, amount: number }[]>([]);
   const [editingArrearId, setEditingArrearId] = React.useState<string | null>(null);
   const [editInput, setEditInput] = React.useState('');
@@ -147,7 +149,12 @@ export const ArrearDetailModal: React.FC<ArrearDetailModalProps> = ({
                                    onClick={async () => {
                                      const val = Number(editInput);
                                      if (val > 0) {
-                                       await updateArrear(item.id, { amount: val });
+                                       const confirmAmount = await confirm({
+                                         title: 'Ubah Nominal Tagihan',
+                                         message: `Apakah Anda yakin ingin mengubah nominal tagihan "${item.type}" menjadi Rp ${val.toLocaleString('id-ID')}?`,
+                                         type: 'warning'
+                                       });
+                                       if (confirmAmount) await updateArrear(item.id, { amount: val });
                                        setEditingArrearId(null);
                                        setEditInput('');
                                      }
@@ -172,7 +179,12 @@ export const ArrearDetailModal: React.FC<ArrearDetailModalProps> = ({
                                    onClick={async () => {
                                      const val = Number(partialInput);
                                      if (val > 0) {
-                                       await handleProcessPayment(item.id, val);
+                                       const confirmInstallment = await confirm({
+                                         title: 'Bayar Cicilan',
+                                         message: `Apakah Anda yakin ingin membayar cicilan tagihan "${item.type}" sebesar Rp ${val.toLocaleString('id-ID')}?`,
+                                         type: 'info'
+                                       });
+                                       if (confirmInstallment) await handleProcessPayment(item.id, val);
                                        setPartialPayingId(null);
                                        setPartialInput('');
                                      }
@@ -195,7 +207,14 @@ export const ArrearDetailModal: React.FC<ArrearDetailModalProps> = ({
                                    Cicilan
                                  </button>
                                  <button
-                                   onClick={() => handleProcessPayment(item.id, item.amount)}
+                                   onClick={async () => {
+                                     const confirmPayment = await confirm({
+                                       title: 'Lunasi Tagihan',
+                                       message: `Apakah Anda yakin ingin melunasi tagihan "${item.type}" (${item.month}) sebesar Rp ${item.amount.toLocaleString('id-ID')}?`,
+                                       type: 'info'
+                                     });
+                                     if (confirmPayment) handleProcessPayment(item.id, item.amount);
+                                   }}
                                    className="px-4 sm:px-5 py-2.5 sm:py-3 bg-emerald-500 text-white rounded-xl font-black text-[8px] sm:text-[9px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-100 active:scale-95 flex items-center gap-2"
                                  >
                                    <CheckCircle size={14} /> Lunas
@@ -220,7 +239,14 @@ export const ArrearDetailModal: React.FC<ArrearDetailModalProps> = ({
                                 </button>
                               )}
                               <button
-                                onClick={() => { if (window.confirm('Hapus tagihan ini secara permanen?')) deleteArrear(item.id); }}
+                                onClick={async () => {
+                                  const confirmDelete = await confirm({
+                                    title: 'Hapus Tagihan',
+                                    message: 'Hapus tagihan ini secara permanen?',
+                                    type: 'danger'
+                                  });
+                                  if (confirmDelete) deleteArrear(item.id);
+                                }}
                                 className="p-3 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                                 title="Hapus Tagihan"
                               >
@@ -258,7 +284,14 @@ export const ArrearDetailModal: React.FC<ArrearDetailModalProps> = ({
                        <FileText size={18} /> Lihat PDF
                      </button>
                      <button
-                       onClick={() => sendConsolidatedReceipt(student.id, sessionPayments)}
+                       onClick={async () => {
+                         const confirmSend = await confirm({
+                           title: 'Kirim Struk',
+                           message: 'Apakah Anda yakin ingin mengirim struk pembayaran ke nomor WhatsApp wali murid?',
+                           type: 'info'
+                         });
+                         if (confirmSend) sendConsolidatedReceipt(student.id, sessionPayments);
+                       }}
                        className="px-8 py-4 bg-emerald-600 text-white rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-emerald-700 transition-all active:scale-95 flex items-center justify-center gap-2 animate-in slide-in-from-right-4 duration-500 order-1 sm:order-2"
                      >
                        <CheckCircle2 size={18} /> Kirim Struk WA ({sessionPayments.length})

@@ -14,22 +14,58 @@ import {
   RefreshCcw,
   Download,
   HandCoins,
+  ArrowUpDown,
   X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { useData } from '../context/DataContext';
+import { useTransactions } from '../hooks/useTransactions';
+import { useArrears } from '../hooks/useArrears';
 import { useAuth } from '../context/AuthContext';
 import { DepositModal } from '../components/features/finance/DepositModal';
+import { ExpenseModal } from '../components/features/finance/ExpenseModal';
+
+const parseTransactionDate = (dateStr: string): Date | null => {
+  try {
+    const parts = dateStr.split(', ');
+    const dPart = parts[0];
+    const tPart = parts[1] || '';
+    
+    if (!dPart) return null;
+    const dateParts = dPart.includes('/') ? dPart.split('/') : dPart.split('-');
+    if (dateParts.length !== 3) return null;
+    
+    const day = parseInt(dateParts[0], 10);
+    const month = parseInt(dateParts[1], 10) - 1;
+    const year = parseInt(dateParts[2], 10);
+    
+    let hours = 0, minutes = 0, seconds = 0;
+    if (tPart) {
+      const timeParts = tPart.split(/[.:]/);
+      if (timeParts.length >= 1) hours = parseInt(timeParts[0], 10);
+      if (timeParts.length >= 2) minutes = parseInt(timeParts[1], 10);
+      if (timeParts.length >= 3) seconds = parseInt(timeParts[2], 10);
+    }
+    
+    return new Date(year, month, day, hours, minutes, seconds);
+  } catch (e) {
+    return null;
+  }
+};
 
 export function FinanceHistory() {
-  const { transactions } = useData();
+  const { transactions } = useTransactions();
+  const { arrears } = useArrears();
   const { user } = useAuth();
   const [showDepositModal, setShowDepositModal] = React.useState(false);
+  const [showExpenseModal, setShowExpenseModal] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [filterType, setFilterType] = React.useState('Semua');
   const [filterMonth, setFilterMonth] = React.useState(''); // format YYYY-MM
+  const [startDate, setStartDate] = React.useState(''); // format YYYY-MM-DD
+  const [endDate, setEndDate] = React.useState(''); // format YYYY-MM-DD
+  const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>('desc');
   const [isMonthPickerOpen, setIsMonthPickerOpen] = React.useState(false);
   const [pickerYear, setPickerYear] = React.useState(new Date().getFullYear());
 
@@ -42,25 +78,51 @@ export function FinanceHistory() {
   
   const canWrite = user?.role === 'Super Admin' || user?.role === 'Bendahara';
 
-  // Rekapitulasi Pemasukan dan Setoran berdasarkan kategori
+  const handleStartDateChange = (val: string) => {
+    setStartDate(val);
+    setFilterMonth('');
+  };
+
+  const handleEndDateChange = (val: string) => {
+    setEndDate(val);
+    setFilterMonth('');
+  };
+
+  // Hitung total tunggakan per kategori
+  const categoryArrears = arrears
+    .filter(a => a.status !== 'Lunas')
+    .reduce((acc, a) => {
+      const category = a.type || 'Lainnya';
+      if (!acc[category]) acc[category] = 0;
+      acc[category] += a.amount;
+      return acc;
+    }, {} as Record<string, number>);
+
+  const totalUnpaidAll = Object.values(categoryArrears).reduce((sum, amount) => sum + amount, 0);
+
+  // Rekapitulasi Pemasukan, Setoran, dan Pengeluaran berdasarkan kategori
   const incomeDetails = transactions
-    .filter(t => t.type === 'Pelunasan' || t.type === 'Penyesuaian' || t.type === 'Setoran')
+    .filter(t => t.type === 'Pelunasan' || t.type === 'Penyesuaian' || t.type === 'Setoran' || t.type === 'Pengeluaran')
     .reduce((acc, t) => {
       const category = t.paymentCategory || 'Lainnya';
-      if (!acc[category]) acc[category] = { terkumpul: 0, disetor: 0, saldo: 0 };
+      if (!acc[category]) acc[category] = { terkumpul: 0, disetor: 0, pengeluaran: 0, saldo: 0 };
       
       if (t.type === 'Setoran') {
         acc[category].disetor += t.amount;
+        acc[category].saldo -= t.amount;
+      } else if (t.type === 'Pengeluaran') {
+        acc[category].pengeluaran += t.amount;
         acc[category].saldo -= t.amount;
       } else {
         acc[category].terkumpul += t.amount;
         acc[category].saldo += t.amount;
       }
       return acc;
-    }, {} as Record<string, { terkumpul: number; disetor: number; saldo: number }>);
+    }, {} as Record<string, { terkumpul: number; disetor: number; pengeluaran: number; saldo: number }>);
 
   const totalIncome = Object.values(incomeDetails).reduce((sum, data: any) => sum + data.terkumpul, 0);
   const totalDisetor = Object.values(incomeDetails).reduce((sum, data: any) => sum + data.disetor, 0);
+  const totalPengeluaran = Object.values(incomeDetails).reduce((sum, data: any) => sum + data.pengeluaran, 0);
   const totalSaldo = Object.values(incomeDetails).reduce((sum, data: any) => sum + data.saldo, 0);
 
   const filteredTransactions = transactions.filter(t => {
@@ -85,7 +147,37 @@ export function FinanceHistory() {
       }
     }
 
-    return matchesSearch && matchesType && matchesMonth;
+    let matchesDateRange = true;
+    if (startDate || endDate) {
+      const tDate = parseTransactionDate(t.date);
+      if (tDate) {
+        if (startDate) {
+          const start = new Date(startDate + 'T00:00:00');
+          if (tDate < start) matchesDateRange = false;
+        }
+        if (endDate) {
+          const end = new Date(endDate + 'T23:59:59');
+          if (tDate > end) matchesDateRange = false;
+        }
+      } else {
+        matchesDateRange = false;
+      }
+    }
+
+    return matchesSearch && matchesType && matchesMonth && matchesDateRange;
+  });
+
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    const dateA = parseTransactionDate(a.date);
+    const dateB = parseTransactionDate(b.date);
+    
+    if (!dateA && !dateB) return 0;
+    if (!dateA) return sortDirection === 'asc' ? 1 : -1;
+    if (!dateB) return sortDirection === 'asc' ? -1 : 1;
+    
+    return sortDirection === 'asc' 
+      ? dateA.getTime() - dateB.getTime() 
+      : dateB.getTime() - dateA.getTime();
   });
 
   const getIcon = (type: string) => {
@@ -95,6 +187,7 @@ export function FinanceHistory() {
       case 'Penyesuaian': return <RefreshCcw className="text-amber-600" size={18} />;
       case 'Penghapusan': return <Trash2 className="text-red-600" size={18} />;
       case 'Setoran': return <HandCoins className="text-indigo-600" size={18} />;
+      case 'Pengeluaran': return <ArrowDownRight className="text-red-600" size={18} />;
       default: return <FileText size={18} />;
     }
   };
@@ -106,6 +199,7 @@ export function FinanceHistory() {
       case 'Penyesuaian': return "bg-amber-50 text-amber-700 border-amber-100";
       case 'Penghapusan': return "bg-red-50 text-red-700 border-red-100";
       case 'Setoran': return "bg-indigo-50 text-indigo-700 border-indigo-100";
+      case 'Pengeluaran': return "bg-red-50 text-red-700 border-red-100";
       default: return "bg-slate-50 text-slate-700 border-slate-100";
     }
   };
@@ -126,13 +220,22 @@ export function FinanceHistory() {
           <p className="text-slate-500 font-medium italic text-sm">Rekam jejak seluruh aktivitas penambahan dan pelunasan tunggakan.</p>
         </div>
         {canWrite && (
-          <button 
-            onClick={() => setShowDepositModal(true)}
-            className="flex items-center gap-2 px-6 py-4 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200"
-          >
-            <HandCoins size={18} />
-            Setor Dana
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setShowExpenseModal(true)}
+              className="flex items-center gap-2 px-6 py-4 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 transition-all shadow-xl shadow-red-200"
+            >
+              <ArrowDownRight size={18} />
+              Catat Pengeluaran
+            </button>
+            <button 
+              onClick={() => setShowDepositModal(true)}
+              className="flex items-center gap-2 px-6 py-4 bg-indigo-600 text-white rounded-2xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200"
+            >
+              <HandCoins size={18} />
+              Setor Dana
+            </button>
+          </div>
         )}
       </div>
 
@@ -146,14 +249,22 @@ export function FinanceHistory() {
             </div>
             <p className="text-3xl font-black">Rp {totalIncome.toLocaleString()}</p>
           </div>
-          <div className="mt-4 pt-4 border-t border-white/20 grid grid-cols-2 gap-2 text-xs font-medium">
-            <div>
-              <p className="opacity-75">Telah Disetor</p>
-              <p className="font-bold">Rp {totalDisetor.toLocaleString()}</p>
+          <div className="mt-4 pt-4 border-t border-white/20 space-y-2 text-xs font-medium">
+            <div className="flex justify-between items-center">
+              <span className="opacity-75">Telah Disetor</span>
+              <span className="font-bold">Rp {totalDisetor.toLocaleString()}</span>
             </div>
-            <div>
-              <p className="opacity-75">Uang di Tangan</p>
-              <p className="font-bold">Rp {totalSaldo.toLocaleString()}</p>
+            <div className="flex justify-between items-center">
+              <span className="opacity-75">Pengeluaran</span>
+              <span className="font-bold">Rp {totalPengeluaran.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="opacity-75">Uang di Tangan</span>
+              <span className="font-bold">Rp {totalSaldo.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="opacity-75">Sisa Tunggakan</span>
+              <span className="font-bold text-red-200">Rp {totalUnpaidAll.toLocaleString()}</span>
             </div>
           </div>
         </div>
@@ -166,14 +277,22 @@ export function FinanceHistory() {
               </div>
               <p className="text-2xl font-black text-slate-900">Rp {data.terkumpul.toLocaleString()}</p>
             </div>
-            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2 text-[10px] font-bold">
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Disetor</p>
-                <p className="text-slate-700 text-sm mt-0.5">Rp {data.disetor.toLocaleString()}</p>
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-2 text-[10px] font-bold">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 uppercase tracking-widest">Disetor</span>
+                <span className="text-slate-700 text-xs">Rp {data.disetor.toLocaleString()}</span>
               </div>
-              <div>
-                <p className="text-slate-400 uppercase tracking-widest">Sisa Kas</p>
-                <p className="text-emerald-600 text-sm mt-0.5">Rp {data.saldo.toLocaleString()}</p>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 uppercase tracking-widest">Pengeluaran</span>
+                <span className="text-slate-700 text-xs">Rp {data.pengeluaran.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 uppercase tracking-widest">Sisa Kas</span>
+                <span className="text-emerald-600 text-xs">Rp {data.saldo.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 uppercase tracking-widest text-red-500">Tunggakan</span>
+                <span className="text-red-600 text-xs">Rp {(categoryArrears[category] || 0).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -192,7 +311,7 @@ export function FinanceHistory() {
               className="w-full pl-12 pr-6 py-3 bg-slate-50 border-transparent rounded-2xl focus:bg-white focus:border-slate-200 outline-none text-sm transition-all"
             />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 px-4 py-1.5 bg-white border border-slate-200 rounded-2xl">
               <Filter size={16} className="text-slate-400" />
               <select 
@@ -206,7 +325,37 @@ export function FinanceHistory() {
                 <option value="Penyesuaian">Penyesuaian</option>
                 <option value="Penghapusan">Penghapusan</option>
                 <option value="Setoran">Setoran</option>
+                <option value="Pengeluaran">Pengeluaran</option>
               </select>
+            </div>
+
+            {/* Date Range Picker */}
+            <div className="flex items-center gap-2 px-4 py-1.5 bg-white border border-slate-200 rounded-2xl">
+              <Calendar size={16} className="text-slate-400" />
+              <input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => handleStartDateChange(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs font-bold text-slate-600 py-0.5 cursor-pointer max-w-[110px]"
+                title="Tanggal Mulai"
+              />
+              <span className="text-slate-300 text-xs font-bold">s/d</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => handleEndDateChange(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs font-bold text-slate-600 py-0.5 cursor-pointer max-w-[110px]"
+                title="Tanggal Selesai"
+              />
+              {(startDate || endDate) && (
+                <button 
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-full transition-colors"
+                  title="Hapus filter rentang tanggal"
+                >
+                  <X size={12} />
+                </button>
+              )}
             </div>
             
             <div className="relative">
@@ -266,6 +415,8 @@ export function FinanceHistory() {
                               key={m}
                               onClick={() => {
                                 setFilterMonth(valueToSet);
+                                setStartDate('');
+                                setEndDate('');
                                 setIsMonthPickerOpen(false);
                               }}
                               className={cn(
@@ -288,7 +439,7 @@ export function FinanceHistory() {
 
             <button 
               onClick={() => {
-                const ws = XLSX.utils.json_to_sheet(filteredTransactions);
+                const ws = XLSX.utils.json_to_sheet(sortedTransactions);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "Riwayat Transaksi");
                 XLSX.writeFile(wb, `Laporan_Keuangan_${new Date().toLocaleDateString()}.xlsx`);
@@ -305,7 +456,19 @@ export function FinanceHistory() {
           <table className="w-full text-left min-w-[800px]">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Waktu & Tanggal</th>
+                <th 
+                  onClick={() => setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none"
+                  title="Klik untuk mengurutkan tanggal"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span>Waktu & Tanggal</span>
+                    <ArrowUpDown size={12} className={cn(
+                      "transition-transform",
+                      sortDirection === 'asc' ? "text-slate-600 rotate-180" : "text-slate-400"
+                    )} />
+                  </div>
+                </th>
                 <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Santri</th>
                 <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kategori</th>
                 <th className="px-8 py-5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aktivitas</th>
@@ -315,7 +478,7 @@ export function FinanceHistory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredTransactions.length === 0 ? (
+              {sortedTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-8 py-20 text-center">
                     <div className="flex flex-col items-center gap-3">
@@ -331,7 +494,7 @@ export function FinanceHistory() {
                   </td>
                 </tr>
               ) : (
-                filteredTransactions.map((t) => (
+                sortedTransactions.map((t) => (
                   <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-3">
@@ -362,10 +525,10 @@ export function FinanceHistory() {
                       <p className={cn(
                         "text-sm font-bold",
                         t.type === 'Pelunasan' ? "text-emerald-600" : 
-                        t.type === 'Penghapusan' ? "text-red-600" : 
+                        t.type === 'Penghapusan' || t.type === 'Pengeluaran' ? "text-red-600" : 
                         t.type === 'Setoran' ? "text-indigo-600" : "text-slate-900"
                       )}>
-                        {t.type === 'Pelunasan' || t.type === 'Penghapusan' || t.type === 'Setoran' ? '-' : '+'} Rp {Math.abs(t.amount).toLocaleString()}
+                        {t.type === 'Pelunasan' || t.type === 'Penghapusan' || t.type === 'Setoran' || t.type === 'Pengeluaran' ? '-' : '+'} Rp {Math.abs(t.amount).toLocaleString()}
                       </p>
                     </td>
                     <td className="px-8 py-6 text-center">
@@ -393,6 +556,11 @@ export function FinanceHistory() {
       <DepositModal 
         isOpen={showDepositModal}
         onClose={() => setShowDepositModal(false)}
+      />
+
+      <ExpenseModal 
+        isOpen={showExpenseModal}
+        onClose={() => setShowExpenseModal(false)}
       />
     </motion.div>
   );
